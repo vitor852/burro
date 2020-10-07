@@ -1,38 +1,19 @@
-import speech_recognition as sr
-import spacy
-import pandas
 import sys
-
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.naive_bayes import MultinomialNB
-
-nlp = spacy.load("pt_core_news_sm")
-vectorizer = TfidfVectorizer()
-cat_vectorizer = CountVectorizer()
-model = MultinomialNB()
-
-def listen() -> str:
-    microphone = sr.Recognizer()
-
-    with sr.Microphone() as source:
-        microphone.adjust_for_ambient_noise(source)
-
-        print(":")
-
-        audio = microphone.listen(source)
-
-        try:
-            sentence = microphone.recognize_google(audio, language="pt-BR")
-            print(sentence)
-
-            return sentence.lower()
-
-        except:
-            print("erro")
-
+from playsound import playsound
 
 def pre_processing_data(data: str) -> str:
+    """
+        Clear user phrase.
+
+        Implemets all seteps of pre processing data.
+        The sentence pass thro tokenization and lemmatization.
+
+        Parameters
+        __________
+        data
+            the user sentence
+    """
+
     tokenized_sentence = nlp(data)
     filtered_sentence = ""
 
@@ -43,9 +24,12 @@ def pre_processing_data(data: str) -> str:
     return filtered_sentence.strip()
 
 def read_data() -> list:
-    path_name = sys.argv[1]
+    """
+        read the data so that the implementation of the algorithm is possible
 
-    data = pandas.read_csv(path_name)
+    """
+
+    data = pandas.read_csv(DATA_PATH)
     categories = data["categories"]
 
     processed_data = []
@@ -56,6 +40,33 @@ def read_data() -> list:
         processed_data.append(processed_sentece)
 
     return processed_data, categories
+
+def choose(category: int, sentence: str):
+    """
+        Execute the predicted category.
+    """
+
+    if(category == "time"):
+        import datetime
+
+        now = datetime.datetime.now()
+
+        print(now)
+
+    elif(category == "playMusic"):
+        from youtube_search import YoutubeSearch
+        import webbrowser
+
+        sentence = sentence.replace("tocar", "")
+
+        default = "https://www.youtube.com"
+
+        results = YoutubeSearch(sentence[2:], max_results=1).to_dict()
+
+        print(sentence[2:])
+
+        webbrowser.open(default + results[0]["url_suffix"], autoraise=True)
+        
 
 data, categories = read_data()
 categories_dictionary = {}
@@ -68,14 +79,42 @@ X = vectorizer.fit_transform(data)
 
 model.fit(X, Y)
 
-while True:
-    sentence = listen()
-    sentence = pre_processing_data(sentence)
-    sentence = vectorizer.transform([sentence])
+def verify_call(sentence: str) -> bool:
+    """
+        Checks if the hot word is the first word in sentence
+    """
 
-    result = model.predict(sentence)
+    sentence = sentence.split()
+    if(sentence[0] == "burro"):
+        return True
+    else:
+        return False
 
-    for i in categories_dictionary.items():
-        if(i[1] == result):
-            print(i[0])
-    
+def handle_sentence(recognizer, audio):
+    """
+        Apply the recognition algorithms and remove the hot word.
+    """
+
+    try:
+        sentence = recognizer.recognize_google(audio, language="pt-BR")
+        has_call = verify_call(sentence)
+
+        if(has_call):
+            sentence = sentence.replace("burro", "")
+
+            # processed_sentence = pre_processing_data(sentence)
+            vectorized_sentence = vectorizer.transform([sentence])
+
+            result = model.predict(vectorized_sentence)
+
+            for i in categories_dictionary.items():
+                if(i[1] == result):
+                    choose(i[0], sentence)
+
+    except sr.UnknownValueError:
+        print("Não entendi")
+    except sr.RequestError:
+        print("Falha internet")
+
+while(True):
+    continue
